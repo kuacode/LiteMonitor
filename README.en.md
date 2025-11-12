@@ -14,15 +14,16 @@ It offers smooth animations, theme customization, transparency control, and mult
 
 ---
 
-## 🖥️ Monitoring Features
+# 🖥️ Monitoring Features
 
 | Category | Metrics |
 |-----------|----------|
-| **CPU** | Usage %, Temperature |
-| **GPU** | Usage %, Temperature, VRAM Usage |
-| **Memory** | RAM Usage % |
-| **Disk** | Read Speed, Write Speed |
-| **Network** | Upload Speed, Download Speed |
+| 💻 **CPU (Processor)** | Monitors real-time CPU usage and temperature with multi-core average and peak tracking. |
+| 🎮 **GPU (Graphics Card)** | Displays GPU usage, core temperature, and VRAM utilization. Supports NVIDIA, AMD, and Intel GPUs. |
+| 💾 **Memory (RAM)** | Shows current RAM usage in percentage and GB units for quick performance insight. |
+| 📀 **Disk (Storage)** | Tracks disk read/write speed (KB/s, MB/s) to analyze storage I/O load. |
+| 🌐 **Network (Bandwidth)** | Displays real-time upload and download speed — lightweight network traffic monitoring. |
+
 
 ---
 

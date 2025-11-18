@@ -10,15 +10,57 @@ namespace LiteMonitor.src.System
 {
     public static class UpdateChecker
     {
-        private const string VersionUrl = "https://raw.githubusercontent.com/Diorser/LiteMonitor/master/resources/version.json";
+        private const string GithubUrl =
+            "https://raw.githubusercontent.com/Diorser/LiteMonitor/master/resources/version.json";
+
+        private const string ChinaUrl =
+            "https://litemonitor.piczip.cn/update/version.json";
 
         public static async Task CheckAsync(bool showMessage = false)
         {
+            string? json = null;
+
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-                var json = await http.GetStringAsync(VersionUrl);
 
+                // ===== ① 先尝试 GitHub =====
+                try
+                {
+                    json = await http.GetStringAsync(GithubUrl);
+                }
+                catch
+                {
+                    // 忽略错误，继续尝试国内源
+                }
+
+                // ===== ② GitHub 失败 → 尝试国内源 =====
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    try
+                    {
+                        json = await http.GetStringAsync(ChinaUrl);
+                    }
+                    catch (Exception ex2)
+                    {
+                        if (showMessage)
+                            MessageBox.Show("检查更新失败（国内源也无法访问）。\n" + ex2.Message,
+                                "LiteMonitor",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    if (showMessage)
+                        MessageBox.Show("检查更新失败（未获取到更新数据）。",
+                            "LiteMonitor",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // ===== ③ 解析 JSON =====
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
@@ -27,7 +69,7 @@ namespace LiteMonitor.src.System
                 string releaseDate = root.TryGetProperty("releaseDate", out var r) ? r.GetString() ?? "" : "";
                 string downloadUrl = root.TryGetProperty("downloadUrl", out var d) ? d.GetString() ?? "" : "";
 
-                // 当前版本 - 使用 <Version>（InformationalVersion）
+                // ===== ④ 当前版本 =====
                 string current = typeof(Program).Assembly
                     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
                     .InformationalVersion
@@ -36,10 +78,10 @@ namespace LiteMonitor.src.System
 
                 current = Normalize(current);
 
-                // 是否发现新版本
+                // ===== ⑤ 对比版本 =====
                 if (IsNewer(latest, current))
                 {
-                    string msg =$"发现新版本：{latest}\n发布日期：{releaseDate}\n更新内容：{changelog}\n是否前往下载？\n\n当前版本：{current}\n";
+                    string msg = $"发现新版本：{latest}\n发布日期：{releaseDate}\n更新内容：{changelog}\n是否前往下载？\n\n当前版本：{current}\n";
 
                     if (MessageBox.Show(msg, "LiteMonitor 更新",
                         MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
@@ -57,7 +99,9 @@ namespace LiteMonitor.src.System
             catch (Exception ex)
             {
                 if (showMessage)
-                    MessageBox.Show("检查更新失败。\n" + ex.Message, "LiteMonitor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("检查更新失败。\n" + ex.Message,
+                        "LiteMonitor",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 else
                     Debug.WriteLine("[UpdateChecker] " + ex.Message);
             }

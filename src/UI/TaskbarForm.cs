@@ -279,13 +279,9 @@ namespace LiteMonitor
 
 
 
-        /// <summary>
-        /// 获取任务栏“小组件 / 新闻和兴趣” 实际占用的宽度
-        /// Win11 Widgets：150
-        /// Win10 News & Interests：150
-        /// Win10 小图标模式：40
-        /// 全部关闭：0
-        /// </summary>
+         // ==========================
+            //  Windows 11 Widgets 检测
+            // ==========================
         public static int GetWidgetsWidth()
         {
             int dpi = TaskbarForm.GetTaskbarDpi();

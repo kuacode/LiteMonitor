@@ -161,11 +161,11 @@ namespace LiteMonitor.src.Core
             {
                 var style = Font.Bold ? FontStyle.Bold : FontStyle.Regular;
 
-                // ⚠️ 不再做任何缩放，保留“基础字体”
+                // ⚠️ 不再做任何缩放，保留"基础字体"
                 FontTitle = new Font(Font.Family, (float)Font.Title, style);
                 FontGroup = new Font(Font.Family, (float)Font.Group, style);
                 FontItem = new Font(Font.Family, (float)Font.Item, style);
-                FontTaskbar = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold);
+                // FontTaskbar 现在从 Settings 中动态构建，不再硬编码
 
                 var valueFamily = string.IsNullOrWhiteSpace(Font.ValueFamily)
                     ? Font.Family

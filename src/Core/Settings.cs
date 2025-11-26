@@ -32,6 +32,12 @@ namespace LiteMonitor
 
         public bool ShowTaskbar { get; set; } = false; //开启任务栏显示
         public bool HideMainForm { get; set; } = false; //是否隐藏主窗口
+        public string ScreenDevice { get; set; } = ""; // 手动指定屏幕设备，""=自动
+
+        // ====== 任务栏字体设置（从主题硬编码迁移出来） ======
+        public string TaskbarFontFamily { get; set; } = "Microsoft YaHei UI"; // 任务栏字体名称
+        public float TaskbarFontSize { get; set; } = 10f; // 任务栏字体大小
+        public bool TaskbarFontBold { get; set; } = true; // 任务栏字体是否加粗
 
 
 

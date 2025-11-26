@@ -166,9 +166,11 @@ namespace LiteMonitor.Common
             // 单位长度≤3：采用智能规则
             if (unit.Length <= 3)
             {
-                return num >= 100
-                    ? ((int)Math.Round(num)) + unit       // 111.1 -> 111KB
-                    : num.ToString("0.0") + unit;         // 99.1 -> 99.1KB
+                if (num >= 1000)
+                    return (num / 1024.0).ToString("0.0") + "MB"; // 1024KB = 1MB
+                if (num >= 100)
+                    return ((int)Math.Round(num)) + unit;       // 111.1 -> 111KB
+                return num.ToString("0.0") + unit;             // 99.1 -> 99.1KB
             }
 
             // 单位长度>3：统一最多1位小数（≥100取整）

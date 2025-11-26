@@ -55,37 +55,14 @@ namespace LiteMonitor
 
             // === 使用 UIUtils 统一格式化 ===
             string value = UIUtils.FormatValue(it.Key, it.DisplayValue);
-            value = UIUtils.FormatHorizontalValue(value);//去除网络和磁盘的“/s”，小数点智能显示
-
-            int colW = rc.Width;
-            int fontH = t.FontItem.Height;
-
-            // --- 测量 label 宽度（保留原版行为）---
-            int wLabel = TextRenderer.MeasureText(
-                g, label, t.FontItem,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.NoPadding
-            ).Width;
-
-            // 原版逻辑：给 label 增加 padding
-            wLabel += fontH / 2;
-
-            // label 宽不能超过列宽
-            if (wLabel > colW - fontH)
-                wLabel = colW - fontH;
-
-            // 剩下所有宽度给 value
-            int wValue = colW - wLabel;
-
-            Rectangle rcLabel = new Rectangle(rc.X, rc.Y, wLabel, rc.Height);
-            Rectangle rcValue = new Rectangle(rc.X + wLabel, rc.Y, wValue, rc.Height);
+            value = UIUtils.FormatHorizontalValue(value);//去除网络和磁盘的"\s"，小数点智能显示
 
             // === label（左对齐）===
             TextRenderer.DrawText(
                 g,
                 label,
                 t.FontItem,
-                rcLabel,
+                rc,
                 ThemeManager.ParseColor(t.Color.TextPrimary),
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding
             );
@@ -97,7 +74,7 @@ namespace LiteMonitor
                 g,
                 value,
                 t.FontValue,
-                rcValue,
+                rc,
                 valColor,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding
             );

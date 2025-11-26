@@ -1,13 +1,6 @@
 using LiteMonitor.src.Core;
 using LiteMonitor.src.System;
-using System;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
-
 namespace LiteMonitor
 {
     public class MainForm : Form
@@ -107,7 +100,7 @@ namespace LiteMonitor
             {
                 // 横屏 → 上下隐藏
                 nearTop = Top <= area.Top + _hideThreshold;
-                nearBottom = area.Bottom - Bottom <= _hideThreshold;
+                //nearBottom = area.Bottom - Bottom <= _hideThreshold; //下方不隐藏 会和任务量冲突
             }
 
             // ===== 是否应该隐藏 =====
@@ -201,8 +194,9 @@ namespace LiteMonitor
             {
                 if (_taskbar == null || _taskbar.IsDisposed)
                 {
-                    _taskbar = new TaskbarForm(_cfg, _ui!);
-                    _taskbar.Show();                  // ★ 必须真正 Show 出来
+                    // ★ 修改这里：传入 'this' (MainForm 实例)
+                    _taskbar = new TaskbarForm(_cfg, _ui!, this);
+                    _taskbar.Show();  // ★ 必须真正 Show 出来
                 }
                 else
                 {
@@ -232,12 +226,6 @@ namespace LiteMonitor
             string sysLang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLower();
             string langPath = Path.Combine(AppContext.BaseDirectory, "resources/lang", $"{sysLang}.json");
             _cfg.Language = File.Exists(langPath) ? sysLang : "en";
-
-            // 语言与主题的加载交给 UIController.ApplyTheme 统一处理
-
-            // 宽度只认 Settings；真正的主题宽度覆盖在 UIController.ApplyTheme 内执行
-            //Width = _cfg.PanelWidth > 100 ? _cfg.PanelWidth : Width;
-
 
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
@@ -395,6 +383,8 @@ namespace LiteMonitor
         private void SavePos()
         {
             ClampToScreen(); // ★ 新增：确保保存前被校正
+            var scr = Screen.FromControl(this);
+            _cfg.ScreenDevice = scr.DeviceName;  // ★新增：保存屏幕ID
             _cfg.Position = new Point(Left, Top);
             _cfg.Save();
         }
@@ -405,7 +395,7 @@ namespace LiteMonitor
         {
             base.OnShown(e);
 
-             //是否隐藏主窗口
+            // === 是否隐藏主窗口 ===
             if (_cfg.HideMainForm)
             {
                 this.Hide();
@@ -414,35 +404,73 @@ namespace LiteMonitor
             // 确保窗体尺寸已初始化
             this.Update();
 
-            var screen = Screen.FromControl(this);
-            var area = screen.WorkingArea;
-
-            if (_cfg.Position.X >= 0)
+            // ============================
+            // ① 多显示器：查找保存的屏幕
+            // ============================
+            Screen? savedScreen = null;
+            if (!string.IsNullOrEmpty(_cfg.ScreenDevice))
             {
-                Location = _cfg.Position;
+                savedScreen = Screen.AllScreens
+                    .FirstOrDefault(s => s.DeviceName == _cfg.ScreenDevice);
+            }
+
+            // ============================
+            // ② 恢复位置：若找到原屏幕 → 精准还原
+            // ============================
+            if (savedScreen != null)
+            {
+                var area = savedScreen.WorkingArea;
+
+                int x = _cfg.Position.X;
+                int y = _cfg.Position.Y;
+
+                // 防止窗口越界（例如 DPI 或屏幕位置改变）
+                if (x < area.Left) x = area.Left;
+                if (y < area.Top) y = area.Top;
+                if (x + Width > area.Right) x = area.Right - Width;
+                if (y + Height > area.Bottom) y = area.Bottom - Height;
+
+                Location = new Point(x, y);
             }
             else
             {
-                int x = area.Right - Width - 50; // 距右边留白
-                int y = area.Top + (area.Height - Height) / 2; // 垂直居中
-                Location = new Point(x, y);
+                // ============================
+                // ③ 回落到你原有逻辑
+                // ============================
+                var screen = Screen.FromControl(this);
+                var area = screen.WorkingArea;
+
+                if (_cfg.Position.X >= 0)
+                {
+                    Location = _cfg.Position;
+                }
+                else
+                {
+                    int x = area.Right - Width - 50; // 距右边留白
+                    int y = area.Top + (area.Height - Height) / 2; // 垂直居中
+                    Location = new Point(x, y);
+                }
             }
-            // ★★ 新增：如果是横屏，先强制主窗体完成第一次布局（避免高度跳变）
+
+            // ========================================================
+            // ★★ 若是横屏：必须强制先渲染一次确保 Height 正确
+            // ========================================================
             if (_cfg.HorizontalMode)
             {
-                _ui.Render(CreateGraphics());   // 强制执行一次横屏布局 & _form.Height 正确化
-                this.Update();                     // 刷新位置
+                _ui.Render(CreateGraphics());   // 完成布局
+                this.Update();                  // 刷新位置
             }
+
             // === 根据配置启动任务栏模式 ===
             if (_cfg.ShowTaskbar)
             {
                 ToggleTaskbar(true);
             }
-                
-            // ✅ 启动时静默检查更新（不打扰用户）
-            _ = UpdateChecker.CheckAsync();
 
+            // === 静默更新 ===
+            _ = UpdateChecker.CheckAsync();
         }
+
 
         
         /// <summary>

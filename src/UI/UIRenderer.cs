@@ -134,11 +134,14 @@ namespace LiteMonitor
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
             // value
-            string text = UIUtils.FormatValue(it.Key, it.DisplayValue);
+            string value = UIUtils.FormatValue(it.Key, it.DisplayValue);
+            if (t.Layout.Width < 220) {
+                 value = UIUtils.FormatHorizontalValue(value);
+                 }
             Color valColor = UIUtils.GetColor(it.Key, it.DisplayValue, t);
 
             TextRenderer.DrawText(
-                g, text, t.FontValue, topRect,
+                g, value, t.FontValue, topRect,
                 valColor,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 

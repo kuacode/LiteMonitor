@@ -20,12 +20,13 @@ namespace LiteMonitor
 
         private List<GroupLayoutInfo> _groups = new();
         private List<Column> _hxCols = new();
+        private List<Column> _hxColsHorizontal = new();
+        private List<Column> _hxColsTaskbar = new();
         private HorizontalLayout? _hxLayout;
         public MainForm MainForm => (MainForm)_form;
 
-
         // 任务栏模式：公开横版列数据（只读引用）
-        public List<Column> GetHorizontalColumns() => _hxCols;
+        public List<Column> GetTaskbarColumns() => _hxColsTaskbar;
         
 
 
@@ -100,21 +101,7 @@ namespace LiteMonitor
             // 刷新渲染
             _form.Invalidate();
             _form.Update();
-
-            //// ========== 横屏模式布局器（必须在 form.Width 设置后创建）==========
-            //if (_cfg.HorizontalMode)
-            //{
-            //    // 横屏必须使用窗口真实宽度，而不是主题的 Layout.Width
-            //    _hxLayout = new HorizontalLayout(
-            //        t,
-            //        _form.Width,
-            //        LayoutMode.Horizontal   // ★ 新增：横版模式
-            //    );
-
-            //}
-
-            // 横版布局器必须在切换 DPI/主题后重建
-            _hxLayout = null;
+            //BuildHorizontalColumns();// 无论竖屏还是横屏，都构建横版列数据
         }
 
 
@@ -155,16 +142,20 @@ namespace LiteMonitor
                     LayoutMode.Horizontal   // ★ 新增：横版模式
                 );
                 
-
-                // layout.Build 计算面板高度 & 面板宽度
-                int h = _hxLayout.Build(_hxCols);
-
-                // ★★ 正确设置横屏宽度：Layout 已经算好了 panelWidth
-                _form.Width = _hxLayout.PanelWidth;
-                _form.Height = h;
-
+                // 只在布局需要重建时重新计算
+                if (_layoutDirty)
+                {
+                    // layout.Build 计算面板高度 & 面板宽度
+                    int h = _hxLayout.Build(_hxColsHorizontal);
+            
+                    // ★★ 正确设置横屏宽度：Layout 已经算好了 panelWidth
+                    _form.Width = _hxLayout.PanelWidth;
+                    _form.Height = h;
+                    _layoutDirty = false;
+                }
+            
                 // Renderer 使用 panelWidth
-                HorizontalRenderer.Render(g, t, _hxCols, _hxLayout.PanelWidth);
+                HorizontalRenderer.Render(g, t, _hxColsHorizontal, _hxLayout.PanelWidth);
                 return;
             }
 
@@ -204,7 +195,7 @@ namespace LiteMonitor
                     }
 
                 // ② ★ 新增：同步更新横版 / 任务栏用的列数据
-                foreach (var col in _hxCols)
+                void UpdateCol(Column col)
                 {
                     if (col.Top != null)
                     {
@@ -217,6 +208,17 @@ namespace LiteMonitor
                         col.Bottom.TickSmooth(_cfg.AnimationSpeed);
                     }
                 }
+                // 主窗口横屏列
+                foreach (var col in _hxColsHorizontal)
+                {
+                    UpdateCol(col);
+                }
+                // 任务栏列
+                foreach (var col in _hxColsTaskbar)
+                {
+                    UpdateCol(col);
+                }
+ 
 
                 _form.Invalidate();   // 主窗体刷新（竖屏 / 横屏）
             }
@@ -278,9 +280,19 @@ namespace LiteMonitor
 
         private void BuildHorizontalColumns()
         {
+            // 主窗口横屏列表
+            _hxColsHorizontal = BuildColumnsCore();
+
+            // 任务栏列表：必须是独立的一份（不能引用同一对象）
+            _hxColsTaskbar = BuildColumnsCore();
+        }
+
+        // 提取公共创建逻辑（完全复用你原来的列构建逻辑）
+        private List<Column> BuildColumnsCore()
+        {
             var cols = new List<Column>();
 
-            // CPU
+            // ==== CPU ====
             if (_cfg.Enabled.CpuLoad || _cfg.Enabled.CpuTemp)
             {
                 cols.Add(new Column
@@ -290,7 +302,7 @@ namespace LiteMonitor
                 });
             }
 
-            // GPU
+            // ==== GPU ====
             if (_cfg.Enabled.GpuLoad || _cfg.Enabled.GpuTemp)
             {
                 cols.Add(new Column
@@ -300,7 +312,7 @@ namespace LiteMonitor
                 });
             }
 
-            // VRAM +  MEM 合并列
+            // ==== VRAM + MEM ====
             if (_cfg.Enabled.MemLoad || _cfg.Enabled.GpuVram)
             {
                 cols.Add(new Column
@@ -310,7 +322,7 @@ namespace LiteMonitor
                 });
             }
 
-            // DISK
+            // ==== DISK ====
             if (_cfg.Enabled.DiskRead || _cfg.Enabled.DiskWrite)
             {
                 cols.Add(new Column
@@ -320,7 +332,7 @@ namespace LiteMonitor
                 });
             }
 
-            // NET
+            // ==== NET ====
             if (_cfg.Enabled.NetUp || _cfg.Enabled.NetDown)
             {
                 cols.Add(new Column
@@ -330,7 +342,7 @@ namespace LiteMonitor
                 });
             }
 
-            // 填充值（平滑）
+            // 初始化初始值（保持动画平滑）
             foreach (var c in cols)
             {
                 if (c.Top != null)
@@ -345,8 +357,9 @@ namespace LiteMonitor
                 }
             }
 
-            _hxCols = cols;
+            return cols;
         }
+
 
 
         public void Dispose()

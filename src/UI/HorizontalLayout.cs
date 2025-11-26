@@ -6,199 +6,218 @@ using System.Windows.Forms;
 
 namespace LiteMonitor
 {
-    /// <summary>
-    /// 布局模式
-    /// Horizontal  → 主面板横版（使用 Theme 字体）
-    /// Taskbar     → 任务栏显示（使用硬编码字体）
-    /// </summary>
     public enum LayoutMode
     {
         Horizontal,
         Taskbar
     }
 
-    /// <summary>
-    /// Horizontal + Taskbar 共用布局器
-    ///
-    /// 说明：
-    /// - 主界面横版布局用 Theme 字体驱动宽度
-    /// - 任务栏布局完全独立，使用硬编码字体进行测量（不依赖主题）
-    ///
-    /// 输出：
-    /// - Column.ColumnWidth   → 计算后的列宽
-    /// - Column.Bounds        → 每列在最终区域内的坐标、宽度、两行高度
-    /// </summary>
     public class HorizontalLayout
     {
-        private readonly Theme _t;            // 横版模式下需要用到 Theme 字体
-        private readonly LayoutMode _mode;    // 当前布局模式（核心分支点）
+        private readonly Theme _t;
+        private readonly LayoutMode _mode;
+        private readonly Settings _settings;
 
-        private readonly int _padding;        // 左右 / 上下 padding
-        private readonly int _rowH;           // 单行高度
+        private readonly int _padding;
+        private int _rowH;
+
+        // DPI
+        private readonly float _dpiScale;
+
         public int PanelWidth { get; private set; }
 
-        // ---------- 横版模式的最大值模板（保持你原有逻辑） ----------
+        // ====== 保留你原始最大宽度模板（横屏模式用） ======
         private const string MAX_VALUE_NORMAL = "100°C";
         private const string MAX_VALUE_IO = "999KB";
-        
-
 
         public HorizontalLayout(Theme t, int initialWidth, LayoutMode mode)
         {
             _t = t;
             _mode = mode;
+            _settings = Settings.Load();
 
-            // ★ 横版：使用主题字体大小决定行高
-            _padding = t.Layout.Padding;
-            _rowH = Math.Max(t.FontItem.Height, t.FontValue.Height);
-
-            if (mode == LayoutMode.Taskbar){
-                // ★ 任务栏：硬编码布局参数（不使用主题 Layout）
-                _rowH = 12;        // 单行高度更小（总高度 28）
-
+            using (var g = Graphics.FromHwnd(IntPtr.Zero))
+            {
+                _dpiScale = g.DpiX / 96f;
             }
-    
+
+            _padding = t.Layout.Padding;
+
+            if (mode == LayoutMode.Horizontal)
+                _rowH = Math.Max(t.FontItem.Height, t.FontValue.Height);
+            else
+                _rowH = 0; // 任务栏模式稍后根据 taskbarHeight 决定
 
             PanelWidth = initialWidth;
         }
 
-
         /// <summary>
-        /// 核心函数：计算每列的宽度和 Bounds
+        /// Build：横屏/任务栏共用布局
         /// </summary>
-        public int Build(List<Column> cols)
+        public int Build(List<Column> cols, int taskbarHeight = 32)
         {
             if (cols == null || cols.Count == 0)
                 return 0;
 
-            int pad = _padding;     // 左右 padding
-            int padV = _padding / 2; // 垂直 padding 减半
+            int pad = _padding;
+            int padV = _padding / 2;
 
-            if (_mode == LayoutMode.Taskbar){
-                padV = 0;//_padding; // 垂直 padding 减半
+            if (_mode == LayoutMode.Taskbar)
+            {
+                // 任务栏上下没有额外 padding
+                padV = 0;
+
+                // === 任务栏行高 = taskbarHeight / 2（你选择的方案 A）===
+                _rowH = taskbarHeight / 2;
             }
 
-        // 宽度初始值 = 左右 padding
-        int totalWidth = pad * 2;
+            // ==== 宽度初始值 ====
+            int totalWidth = pad * 2;
+
+            float dpi = _dpiScale;
 
             using (var g = Graphics.FromHwnd(IntPtr.Zero))
             {
                 foreach (var col in cols)
                 {
-                    // --------------------------
-                    // ① 计算 label 宽度
-                    // --------------------------
-                    string label =
-                        col.Top != null ? LanguageManager.T($"Short.{col.Top.Key}") : "";
+                    // ===== label（Top/Bottom 按最大宽度） =====
+                    string labelTop = col.Top != null ? LanguageManager.T($"Short.{col.Top.Key}") : "";
+                    string labelBottom = col.Bottom != null ? LanguageManager.T($"Short.{col.Bottom.Key}") : "";
 
-                    // ★ Taskbar 模式使用硬编码字体
-                    Font fontLabel, fontValue;
+                    Font labelFont, valueFont;
 
                     if (_mode == LayoutMode.Taskbar)
                     {
-                        fontLabel = _t.FontTaskbar;
-                        fontValue = _t.FontTaskbar;
+                        var fontStyle = _settings.TaskbarFontBold ? FontStyle.Bold : FontStyle.Regular;
+                        var f = new Font(_settings.TaskbarFontFamily, _settings.TaskbarFontSize, fontStyle);
+                        labelFont = f;
+                        valueFont = f;
                     }
                     else
                     {
-                        fontLabel = _t.FontItem;
-                        fontValue = _t.FontValue;
+                        labelFont = _t.FontItem;
+                        valueFont = _t.FontValue;
                     }
 
-                    int wLabel = TextRenderer.MeasureText(
-                        g, label, fontLabel,
+                    int wLabelTop = TextRenderer.MeasureText(
+                        g, labelTop, labelFont,
                         new Size(int.MaxValue, int.MaxValue),
                         TextFormatFlags.NoPadding
                     ).Width;
 
-                    // ★ 任务栏限制 label 宽度（更窄）
-                    if (_mode == LayoutMode.Taskbar)
-                        wLabel = Math.Min(wLabel, 60);
-
-
-                    // --------------------------
-                    // ② 计算 value “最大可能宽度”
-                    // --------------------------
-                    string sample = GetMaxValueSample(col);
-
-                    int wValue = TextRenderer.MeasureText(
-                        g, sample, fontValue,
+                    int wLabelBottom = TextRenderer.MeasureText(
+                        g, labelBottom, labelFont,
                         new Size(int.MaxValue, int.MaxValue),
                         TextFormatFlags.NoPadding
                     ).Width;
 
+                    int wLabel = Math.Max(wLabelTop, wLabelBottom);
 
-                    // --------------------------
-                    // ③ 计算最终列宽
-                    // --------------------------
-                    int colW = wLabel + wValue + (_rowH);
+                    // ========== value 最大宽度 ==========
+                    string sampleTop = GetMaxValueSample(col, true);
+                    string sampleBottom = GetMaxValueSample(col, false);
 
-                    // ★ 任务栏列宽下限
-                    if (_mode == LayoutMode.Taskbar)
-                        colW = Math.Max(48, colW);
+                    int wValueTop = TextRenderer.MeasureText(
+                        g, sampleTop, valueFont,
+                        new Size(int.MaxValue, int.MaxValue),
+                        TextFormatFlags.NoPadding
+                    ).Width;
 
-                    col.ColumnWidth = colW;
-                    totalWidth += colW;
+                    int wValueBottom = TextRenderer.MeasureText(
+                        g, sampleBottom, valueFont,
+                        new Size(int.MaxValue, int.MaxValue),
+                        TextFormatFlags.NoPadding
+                    ).Width;
 
-
-                    // --------------------------
-                    // ④ 任务栏字体对象由我们自己创建 → 需释放
-                    // --------------------------
+                    int wValue = Math.Max(wValueTop, wValueBottom);
+                    int paddingX = _rowH;
                     if (_mode == LayoutMode.Taskbar)
                     {
-                        fontLabel.Dispose();
-                        fontValue.Dispose();
+                        // 任务栏模式：紧凑固定左/右内间距
+                        paddingX = (int)Math.Round(10 * dpi);
+                    }
+                    // ====== 列宽（不再限制最大/最小宽度）======
+                    col.ColumnWidth = wLabel + wValue + paddingX;
+                    totalWidth += col.ColumnWidth;
+
+                    if (_mode == LayoutMode.Taskbar)
+                    {
+                        labelFont.Dispose();
+                        valueFont.Dispose();
                     }
                 }
             }
 
-            // --------------------------
-            // ⑤ 列间距
-            // --------------------------
-            int gap = (_mode == LayoutMode.Taskbar) ? 6 : 12;
-            totalWidth += (cols.Count - 1) * gap;
+            // ===== gap 随 DPI =====
+            int gapBase = (_mode == LayoutMode.Taskbar) ? 6 : 12;
+            int gap = (int)Math.Round(gapBase * dpi);
 
+            if (cols.Count > 1)
+                totalWidth += (cols.Count - 1) * gap;
 
-            // --------------------------
-            // ⑥ 设置 Bounds 坐标
-            // --------------------------
             PanelWidth = totalWidth;
+
+            // ===== 设置列 Bounds =====
             int x = pad;
 
             foreach (var col in cols)
             {
                 col.Bounds = new Rectangle(x, padV, col.ColumnWidth, _rowH * 2);
+
+                if (_mode == LayoutMode.Taskbar)
+                {
+                    // ====== 任务栏模式：计算上下两行 Bounds ======
+                    col.BoundsTop = new Rectangle(
+                        col.Bounds.X,
+                        col.Bounds.Y + 2,     // === 保留你选择的 A ±2 像素偏移 ===
+                        col.Bounds.Width,
+                        _rowH - 2
+                    );
+
+                    col.BoundsBottom = new Rectangle(
+                        col.Bounds.X,
+                        col.Bounds.Y + _rowH - 2,
+                        col.Bounds.Width,
+                        _rowH
+                    );
+                }
+                else
+                {
+                    // 横屏模式也生成上下行 Bounds
+                    col.BoundsTop = new Rectangle(
+                        col.Bounds.X,
+                        col.Bounds.Y,
+                        col.Bounds.Width,
+                        _rowH
+                    );
+
+                    col.BoundsBottom = new Rectangle(
+                        col.Bounds.X,
+                        col.Bounds.Y + _rowH,
+                        col.Bounds.Width,
+                        _rowH
+                    );
+                }
+
                 x += col.ColumnWidth + gap;
             }
 
-            // --------------------------
-            // ⑦ 返回高度（上下 padding + 两行）
-            // --------------------------
             return padV * 2 + _rowH * 2;
         }
 
-
-        /// <summary>
-        /// 获取最大值模板：横版 / 任务栏各用不同模板
-        /// </summary>
-        private string GetMaxValueSample(Column col)
+        private string GetMaxValueSample(Column col, bool isTop)
         {
-            string key = col.Top?.Key?.ToUpperInvariant() ?? "";
+            string key = (isTop ? col.Top?.Key : col.Bottom?.Key)?.ToUpperInvariant() ??
+                         (isTop ? col.Bottom?.Key : col.Top?.Key)?.ToUpperInvariant() ?? "";
 
             bool isIO =
                 key.Contains("READ") || key.Contains("WRITE") ||
                 key.Contains("UP") || key.Contains("DOWN");
+
             return isIO ? MAX_VALUE_IO : MAX_VALUE_NORMAL;
         }
-
-
     }
 
-
-    /// <summary>
-    /// 每一列对应 Top + Bottom 两行项目
-    /// 宽度与 Bounds 坐标由 HorizontalLayout 计算
-    /// </summary>
     public class Column
     {
         public MetricItem? Top;
@@ -206,5 +225,9 @@ namespace LiteMonitor
 
         public int ColumnWidth;
         public Rectangle Bounds = Rectangle.Empty;
+
+        // ★★ B 方案新增：上下行布局由 Layout 计算，不再由 Renderer 处理
+        public Rectangle BoundsTop = Rectangle.Empty;
+        public Rectangle BoundsBottom = Rectangle.Empty;
     }
 }

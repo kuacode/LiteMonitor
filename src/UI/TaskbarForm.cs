@@ -27,11 +27,14 @@ namespace LiteMonitor
         private bool _lastIsLightTheme = false;
 
         private System.Collections.Generic.List<Column>? _cols;
-
-        public TaskbarForm(Settings cfg, UIController ui)
+        // 1. 添加字段
+        private readonly MainForm _mainForm;
+        public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
         {
             _cfg = cfg;
             _ui = ui;
+            // 2. 初始化 MainForm 引用
+            _mainForm = mainForm;
             // 初始化：LayoutMode.Taskbar
             _layout = new HorizontalLayout(
                 ThemeManager.Current,
@@ -93,7 +96,8 @@ namespace LiteMonitor
         [DllImport("user32.dll")] private static extern IntPtr SetParent(IntPtr child, IntPtr parent);
         [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
         [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
-
+         // 在 TaskbarForm 类中添加
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
         private const int GWL_STYLE = -16;
         private const int GWL_EXSTYLE = -20;
         private const int WS_CHILD = 0x40000000;
@@ -204,14 +208,14 @@ namespace LiteMonitor
             // 1. 检查主题是否改变，如果改变会自动更新背景色 Key
             CheckTheme();
 
-            _cols = _ui.GetHorizontalColumns();
+            _cols = _ui.GetTaskbarColumns();
             if (_cols == null || _cols.Count == 0) return;
 
             // 更新任务栏高度
             UpdateTaskbarRect();
 
-            // 使用新的任务栏布局计算列宽
-            _layout.Build(_cols);
+            // 使用新的任务栏布局计算列宽 + 行高（传入任务栏高度）
+            _layout.Build(_cols, _taskbarHeight);
             Width = _layout.PanelWidth;
             Height = _taskbarHeight;
 
@@ -401,16 +405,51 @@ namespace LiteMonitor
             // ⭐ 建议：如果上面的修改还是有轻微杂边，可以将下面这一行改为 AntiAlias
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            TaskbarRenderer.Render(g, _cols, _taskbarHeight);
+            TaskbarRenderer.Render(g, _cols);
 
         }
+        // 添加鼠标右键点击事件
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
 
+            if (e.Button == MouseButtons.Right)
+            {
+                // 1. 构建菜单 (复用 MenuManager)
+                var menu = MenuManager.Build(_mainForm, _cfg, _ui);
+
+                // 2. ★★★ 核心修复：强制让 TaskbarForm 获取前台焦点 ★★★
+                // 如果不加这句，菜单弹出后会处于“后台”状态，需要点击才能激活
+                SetForegroundWindow(this.Handle);
+
+                // 3. 显示菜单
+                menu.Show(Cursor.Position);
+            }
+        }
+        // 添加鼠标左键双击事件
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+
+            // 只响应左键双击
+            if (e.Button == MouseButtons.Left)
+            {
+                // 调用主窗口的显示方法
+                // 该方法在 MainForm.cs 中已定义，会处理 Show(), Activate() 和配置保存
+                _mainForm.ShowMainWindow();
+            }
+        }
         protected override CreateParams CreateParams
         {
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT;
+                // 保留 Layered 和 ToolWindow，但在任务栏模式下，必须允许鼠标交互
+                cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW; 
+                
+                // ★★★ 删掉或注释掉下面这行鼠标穿透 WS_EX_TRANSPARENT ★★★
+                // cp.ExStyle |= WS_EX_TRANSPARENT; 
+                
                 return cp;
             }
         }

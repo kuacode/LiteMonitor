@@ -88,7 +88,8 @@ namespace LiteMonitor
                 else
                 {
                     if (showMessage)
-                        MessageBox.Show("当前已是最新版本。", "检查更新",
+                         // ★★★ 修改了这里 ★★★
+                        MessageBox.Show($"当前已是最新版本 ：v{current}", "检查更新", 
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -218,9 +219,27 @@ namespace LiteMonitor
         // ========================================================
         // 【7】获取当前版本号
         // ========================================================
+                // ========================================================
+        // 【7】获取当前版本号 (修复版)
+        // ========================================================
         private static string GetCurrentVersion()
         {
-            return Assembly.GetExecutingAssembly().GetName().Version!.ToString();
+            // 优先读取 AssemblyInformationalVersion (对应 csproj 中的 <Version>)
+            var version = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+
+            // 如果读取失败，回退到 ProductVersion
+            if (string.IsNullOrWhiteSpace(version))
+                version = Application.ProductVersion;
+
+            // 这里的 version 可能会包含后缀 (如 1.0.7+abcdef)，需要截断
+            int plusIndex = version.IndexOf('+');
+            if (plusIndex > 0)
+                version = version.Substring(0, plusIndex);
+
+            return version;
         }
+
     }
 }

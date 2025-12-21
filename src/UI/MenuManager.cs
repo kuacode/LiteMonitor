@@ -389,7 +389,17 @@ namespace LiteMonitor
                     cfg.TaskbarFontBold = true;
                 }
                 cfg.Save();
+                // 4. ★★★ 核心修复：遍历所有窗口找到 TaskbarForm 并刷新布局 ★★★
+                // 这样就不用管 form 是 Main 还是什么了，直接找目标
+                foreach (Form f in Application.OpenForms)
+                {
+                    if (f is TaskbarForm tf)
+                    {
+                        tf.ReloadLayout(); // 调用刚才加的方法
+                    }
+                }
                 ui?.ApplyTheme(cfg.Skin);
+                
             };
             taskbarMenu.DropDownItems.Add(itemCompact);
 
@@ -427,8 +437,10 @@ namespace LiteMonitor
                 if (cfg.TaskbarAlignLeft) { cfg.TaskbarAlignLeft = false; cfg.Save(); }
             }
             
-            moreRoot.DropDownItems.Insert(0, taskbarMenu);
+            moreRoot.DropDownItems.Add(taskbarMenu);
             moreRoot.DropDownItems.Add(new ToolStripSeparator());
+
+            
             
             // === 高温报警 ===
             var alertItem = new ToolStripMenuItem(LanguageManager.T("Menu.AlertTemp") + " (>" + cfg.AlertTempThreshold + "°C)")

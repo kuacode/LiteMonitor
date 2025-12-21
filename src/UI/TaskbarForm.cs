@@ -12,7 +12,7 @@ namespace LiteMonitor
         private readonly UIController _ui;
         private readonly System.Windows.Forms.Timer _timer = new();
 
-        private readonly HorizontalLayout _layout;
+        private HorizontalLayout _layout;
 
         private IntPtr _hTaskbar = IntPtr.Zero;
         private IntPtr _hTray = IntPtr.Zero;
@@ -29,6 +29,11 @@ namespace LiteMonitor
         private System.Collections.Generic.List<Column>? _cols;
         // 1. 添加字段
         private readonly MainForm _mainForm;
+        public void ReloadLayout()
+        {
+            // 重新创建一个布局器，它内部会自动读取最新的 Settings 文件
+            _layout = new HorizontalLayout(ThemeManager.Current, 300, LayoutMode.Taskbar);
+        }
         public TaskbarForm(Settings cfg, UIController ui, MainForm mainForm)
         {
             _cfg = cfg;
@@ -36,11 +41,7 @@ namespace LiteMonitor
             // 2. 初始化 MainForm 引用
             _mainForm = mainForm;
             // 初始化：LayoutMode.Taskbar
-            _layout = new HorizontalLayout(
-                ThemeManager.Current,
-                300,                 // 给一个初始宽度，不影响最终结果，只避免 0 值问题
-                LayoutMode.Taskbar
-            );
+            ReloadLayout();// 初始化布局器，读取最新的 Settings 文件
 
             _isWin11 = Environment.OSVersion.Version >= new Version(10, 0, 22000);
 

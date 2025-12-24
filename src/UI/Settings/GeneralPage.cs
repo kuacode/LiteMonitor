@@ -57,10 +57,46 @@ namespace LiteMonitor.src.UI.SettingsPage
             _container.ResumeLayout();
             _isLoaded = true;
         }
+        private void CreateBehaviorCard()
+        {
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.Behavior"));
 
+            // ★ 全部传入 LanguageManager.T("Menu.Enable")
+            // 3. TopMost (★ 传入 LanguageManager.T("Menu.Enable"))
+            _chkTopMost = new LiteCheck(Config.TopMost, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TopMost"), _chkTopMost));
+
+             _chkClickThrough = new LiteCheck(Config.ClickThrough, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClickThrough"), _chkClickThrough));
+
+             _chkClamp = new LiteCheck(Config.ClampToScreen, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClampToScreen"), _chkClamp));
+
+            _chkAutoHide = new LiteCheck(Config.AutoHide, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AutoHide"), _chkAutoHide));
+
+            _chkHideTray = new LiteCheck(Config.HideTrayIcon, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideTrayIcon"), _chkHideTray));
+
+            _chkHideMain = new LiteCheck(Config.HideMainForm, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideMainForm"), _chkHideMain));
+
+            // 2. 新增任务栏显示开关
+            _chkShowTaskbar = new LiteCheck(Config.ShowTaskbar, LanguageManager.T("Menu.Enable"));
+            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarShow"), _chkShowTaskbar));
+
+            _chkHideTray.CheckedChanged += (s, e) => CheckVisibilitySafe();
+            _chkHideMain.CheckedChanged += (s, e) => CheckVisibilitySafe();
+            _chkShowTaskbar.CheckedChanged += (s, e) => CheckVisibilitySafe();
+
+            AddGroupToPage(group);
+        }
+
+
+        
         private void CreateSystemCard()
         {
-            var group = new LiteSettingsGroup("System Settings");
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.SystemSettings"));
 
             // 1. Language
             _cmbLang = new LiteComboBox();
@@ -80,8 +116,8 @@ namespace LiteMonitor.src.UI.SettingsPage
             }
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.Language"), _cmbLang));
 
-            // 2. AutoStart (★ 传入 "Enable")
-            _chkAutoStart = new LiteCheck(Config.AutoStart, "Enable");
+            // 2. AutoStart (★ 传入 LanguageManager.T("Menu.Enable"))
+            _chkAutoStart = new LiteCheck(Config.AutoStart, LanguageManager.T("Menu.Enable"));
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AutoStart"), _chkAutoStart));
 
            
@@ -89,44 +125,10 @@ namespace LiteMonitor.src.UI.SettingsPage
             AddGroupToPage(group);
         }
 
-        private void CreateBehaviorCard()
-        {
-            var group = new LiteSettingsGroup("Behavior");
-
-            // ★ 全部传入 "Enable"
-            // 3. TopMost (★ 传入 "Enable")
-            _chkTopMost = new LiteCheck(Config.TopMost, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TopMost"), _chkTopMost));
-
-             _chkClickThrough = new LiteCheck(Config.ClickThrough, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClickThrough"), _chkClickThrough));
-
-             _chkClamp = new LiteCheck(Config.ClampToScreen, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.ClampToScreen"), _chkClamp));
-
-            _chkAutoHide = new LiteCheck(Config.AutoHide, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AutoHide"), _chkAutoHide));
-
-            _chkHideTray = new LiteCheck(Config.HideTrayIcon, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideTrayIcon"), _chkHideTray));
-
-            _chkHideMain = new LiteCheck(Config.HideMainForm, "开启");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.HideMainForm"), _chkHideMain));
-
-            // 2. 新增任务栏显示开关
-            _chkShowTaskbar = new LiteCheck(Config.ShowTaskbar, "Enable");
-            group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarShow"), _chkShowTaskbar));
-
-            _chkHideTray.CheckedChanged += (s, e) => CheckVisibilitySafe();
-            _chkHideMain.CheckedChanged += (s, e) => CheckVisibilitySafe();
-            _chkShowTaskbar.CheckedChanged += (s, e) => CheckVisibilitySafe();
-
-            AddGroupToPage(group);
-        }
 
         private void CreateSourceCard()
         {
-            var group = new LiteSettingsGroup("Hardware Source");
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.HardwareSettings"));
 
             // Disk
             _cmbDisk = new LiteComboBox();

@@ -28,10 +28,12 @@ namespace LiteMonitor.src.UI
             this.Size = new Size(820, 680);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.Text = "Settings";
+            //this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Text = LanguageManager.T("Menu.SettingsPanel");
             this.Font = new Font("Microsoft YaHei UI", 9F);
             this.BackColor = UIColors.MainBg;
+            this.ShowInTaskbar = false;
 
             // === 1. 侧边栏 ===
             var pnlSidebar = new Panel { Dock = DockStyle.Left, Width = 160, BackColor = UIColors.SidebarBg };
@@ -60,9 +62,9 @@ namespace LiteMonitor.src.UI
                 Padding = new Padding(0, 14, 20, 0), WrapContents = false, BackColor = Color.Transparent 
             };
             
-            var btnOk = new LiteButton("OK", true);
-            var btnCancel = new LiteButton("Cancel", false);
-            var btnApply = new LiteButton("Apply", false);
+            var btnOk = new LiteButton(LanguageManager.T("Menu.OK"), true);
+            var btnCancel = new LiteButton(LanguageManager.T("Menu.Cancel"), false);
+            var btnApply = new LiteButton(LanguageManager.T("Menu.Apply"), false);
 
             btnOk.Click += (s, e) => { ApplySettings(); this.DialogResult = DialogResult.OK; this.Close(); };
             btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
@@ -87,13 +89,13 @@ namespace LiteMonitor.src.UI
             _pages.Clear();
             //AddNav("General", "基础设置", new SettingsPageBase()); // 占位
             // 在 InitPages() 中
-            AddNav("General", "基础设置", new GeneralPage()); // 替换旧的 SettingsPageBase()
+            AddNav("General", LanguageManager.T("Menu.General"), new GeneralPage()); // 替换旧的 SettingsPageBase()
             // 2. 外观设置 (新增)
-            AddNav("Appearance", "外观设置", new AppearancePage());
+            AddNav("Appearance", LanguageManager.T("Menu.Appearance"), new AppearancePage());
             // 3. 监控项显示 (新增)
-            AddNav("Monitor", "监控项显示", new MonitorPage());
+            AddNav("Monitor", LanguageManager.T("Menu.Monitor"), new MonitorPage());
             // 4. 告警阈值设置 (新增)   
-            AddNav("Threshold", "告警阈值设置", new ThresholdPage()); // ★ 新增这一行
+            AddNav("Threshold", LanguageManager.T("Menu.Thresholds"), new ThresholdPage()); // ★ 新增这一行
             
             
             // 强制刷新一次布局，防止按钮不可见

@@ -27,7 +27,7 @@ namespace LiteMonitor
             // =================================================================
             // [新增] 设置中心入口
             // =================================================================
-            var itemSettings = new ToolStripMenuItem("设置中心"); 
+            var itemSettings = new ToolStripMenuItem(LanguageManager.T("Menu.SettingsPanel")); 
             // 临时写死中文，等面板做完善了再换成 LanguageManager.T("Menu.Settings")
             
             itemSettings.Font = new Font(itemSettings.Font, FontStyle.Bold); 

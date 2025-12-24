@@ -46,7 +46,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             AddHead("监控项 (ID)", X_ID);
             AddHead("名称 (Name)", X_NAME);
             AddHead("简称 (Short)", X_SHORT);
-            AddHead("显示/隐藏 (Display/Hide)", X_PANEL); 
+            AddHead("显示 (Display) / 隐藏 (Hide)", X_PANEL); 
             // AddHead("任务栏", X_TASKBAR); // 可以省略，或者保留作为列标题
             AddHead("排序 (Sort)", X_SORT); // 稍微居中一点
 
@@ -173,8 +173,8 @@ namespace LiteMonitor.src.UI.SettingsPage
             // === 2. 优化：复选框带文字，左对齐，移除魔数 ===
             // 假设 LiteCheck 支持 (bool checked, string text) 构造函数
             // 如果不支持，你需要修改 LiteCheck.cs 或手动设置 Text 属性
-            var chk1 = new LiteCheck(item.VisibleInPanel, "主界面") { Location = new Point(X_PANEL, 10) };
-            var chk2 = new LiteCheck(item.VisibleInTaskbar, "任务栏") { Location = new Point(X_TASKBAR, 10) };
+            var chk1 = new LiteCheck(item.VisibleInPanel, LanguageManager.T("Menu.MainForm")) { Location = new Point(X_PANEL, 10) };
+            var chk2 = new LiteCheck(item.VisibleInTaskbar, LanguageManager.T("Menu.Taskbar")) { Location = new Point(X_TASKBAR, 10) };
 
             // === 1. 优化：按钮位置使用常量，与 Group 严格对齐 ===
             var btnUp = CreateSortBtn("▲", X_SORT + BTN_OFFSET_L, (s, e) => MoveRow(row, -1, parentContainer));

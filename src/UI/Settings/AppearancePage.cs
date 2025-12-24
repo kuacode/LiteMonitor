@@ -46,7 +46,7 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         private void CreateThemeCard()
         {
-            var group = new LiteSettingsGroup(LanguageManager.T("Menu.Groups.Interface")); // 建议: 这里也可以用 "主界面设置" 或对应的Key
+            var group = new LiteSettingsGroup(LanguageManager.T("Menu.MainFormSettings")); // 建议: 这里也可以用 "主界面设置" 或对应的Key
 
             _cmbTheme = new LiteComboBox();
             foreach (var t in ThemeManager.GetAvailableThemes()) _cmbTheme.Items.Add(t);
@@ -113,16 +113,14 @@ namespace LiteMonitor.src.UI.SettingsPage
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.TaskbarAlign"), _cmbTaskbarAlign));
 
 
-            var tips = new Label { 
-                Text = "Note: Alignment only works when Win11 Taskbar is centered.", 
-                AutoSize = true, ForeColor = Color.Gray, Font = new Font("Microsoft YaHei UI", 8F),
-                Padding = new Padding(5)
-            };
+            // ★★★ 修改处：使用 LiteNote 替换 Label ★★★
+            // 解决了 "离分割线太近" (LiteNote内部有Y偏移) 和 "下方留白过多" (LiteNote高度固定32)
+            var tips = new LiteNote("Note: Alignment only works when Win11 Taskbar is centered.", 0);
             group.AddFullItem(tips);
 
             AddGroupToPage(group);
         }
-
+        
         private void AddGroupToPage(LiteSettingsGroup group)
         {
             var wrapper = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 0, 0, 20) };

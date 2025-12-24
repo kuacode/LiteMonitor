@@ -92,7 +92,8 @@ namespace LiteMonitor.src.UI.SettingsPage
                 out _inMaxCpuPwr, out _inMaxGpuPwr,
                 C_Action, C_Action, isIntOnly: true);
 
-            AddDescription(content, "⚠️ 为了进度条显示更准确，请填写硬件的实际最大值，如不填，将在高负载时动态学习并更新。");
+            // ★★★ 修改处：直接添加 LiteNote，缩进 20px ★★★
+            content.Controls.Add(new LiteNote("⚠️ 为了进度条显示更准确，请填写硬件的实际最大值，如不填，将在高负载时动态学习并更新。", 20));
 
             AddCardToPage(content.Parent as LiteCard);
         }
@@ -204,23 +205,6 @@ namespace LiteMonitor.src.UI.SettingsPage
             flow.Controls.Add(row);
         }
 
-        private void AddDescription(FlowLayoutPanel flow, string text)
-        {
-            // 修改：高度增加到 35，给下方留点白
-            var row = new Panel { Size = new Size(580, 30), Margin = new Padding(0) };
-            
-            // 修改：Y 坐标改为 12，让文字下沉，不要贴着上面的线
-            var lbl = new Label { 
-                Text = text, 
-                Location = new Point(20, 12), 
-                AutoSize = true, 
-                Font = new Font("Microsoft YaHei UI", 8F), 
-                ForeColor = Color.Gray 
-            };
-            
-            row.Controls.Add(lbl);
-            flow.Controls.Add(row);
-        }
 
         // ★ 核心修改方法
         private LiteUnderlineInput CreateNumInput(double val, Color? textColor = null, bool isIntOnly = false)

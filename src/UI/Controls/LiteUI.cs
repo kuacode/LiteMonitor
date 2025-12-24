@@ -12,7 +12,7 @@ namespace LiteMonitor.src.UI.Controls
         public static Color Border = Color.FromArgb(220, 220, 220);
         public static Color Primary = Color.FromArgb(0, 120, 215);
         public static Color TextMain = Color.FromArgb(32, 32, 32);
-        public static Color TextSub = Color.FromArgb(120, 120, 120);
+        public static Color TextSub = Color.FromArgb(90, 90, 90);
         public static Color GroupHeader = Color.FromArgb(248, 249, 250); 
         
         // Win11 风格导航栏颜色
@@ -23,13 +23,43 @@ namespace LiteMonitor.src.UI.Controls
     // =======================================================================
     // 1. 设置页面核心组件 (Settings Components)
     // =======================================================================
-
+    // [新增] 统一的说明文本控件 (用于设置项下方的 Note/Tips)
+    public class LiteNote : Panel
+    {
+        // indent: 左侧缩进量 (AppearancePage传0, ThresholdPage传20)
+        public LiteNote(string text, int indent = 0)
+        {
+            // Dock=Top 确保在 FlowLayout 和 TableLayout 中都能撑开宽度
+            this.Dock = DockStyle.Top;
+            // 固定高度 32px：
+            // 1. 足够容纳文字 (约15px)
+            // 2. 顶部留 10px 间距 (解决离分割线太近)
+            // 3. 底部留 ~7px 间距 (解决下方留白过多)
+            this.Height = 32; 
+            this.Margin = new Padding(0);
+            
+            var lbl = new Label { 
+                Text = text, 
+                AutoSize = true, 
+                // 统一风格：灰色、8号字
+                Font = new Font("Microsoft YaHei UI", 8F), 
+                ForeColor = Color.Gray,
+                // Y=10: 让文字下沉，与上方分割线拉开距离
+                Location = new Point(indent, 10) 
+            };
+            
+            this.Controls.Add(lbl);
+        }
+    }
     // [容器] 双列设置卡片组
     public class LiteSettingsGroup : Panel
     {
         private TableLayoutPanel _layout;
         private Panel _inner;
+        // ★ 新增：手动追踪当前列索引 (0 或 1)
+        private int _columnIndexTracker = 0;
 
+        
         public LiteSettingsGroup(string title)
         {
             this.AutoSize = true;
@@ -71,15 +101,41 @@ namespace LiteMonitor.src.UI.Controls
             this.Controls.Add(_inner);
         }
 
+        // ★★★ 修复后的 AddItem ★★★
         public void AddItem(Control item)
         {
             _layout.Controls.Add(item);
+
+            // 使用手动追踪器判断列
+            if (_columnIndexTracker == 0)
+            {
+                // === 左列 ===
+                // 右侧留 20px，左侧 0
+                item.Margin = new Padding(0, 2, 30, 2);
+                
+                // 下一个控件将进入右列
+                _columnIndexTracker = 1; 
+            }
+            else
+            {
+                // === 右列 ===
+                // 左侧留 20px，右侧 0
+                item.Margin = new Padding(30, 2, 0, 2);
+                
+                // 下一个控件将进入下一行的左列
+                _columnIndexTracker = 0; 
+            }
         }
 
+        // ★★★ 修复后的 AddFullItem ★★★
         public void AddFullItem(Control item)
         {
             _layout.Controls.Add(item);
             _layout.SetColumnSpan(item, 2);
+            item.Margin = new Padding(0, 2, 0, 2);
+            
+            // 跨列控件占据了一整行，所以下一个控件一定从左列 (0) 开始
+            _columnIndexTracker = 0;
         }
     }
 
@@ -130,7 +186,7 @@ namespace LiteMonitor.src.UI.Controls
 
         public LiteComboBox()
         {
-            this.Size = new Size(110, 26);
+            this.Size = new Size(110,28);
             this.BackColor = Color.White;
             this.Padding = new Padding(1);
 
@@ -138,7 +194,8 @@ namespace LiteMonitor.src.UI.Controls
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9F),
+                ForeColor = UIColors.TextSub,
+                Font = new Font("Microsoft YaHei UI", 9F),
                 Dock = DockStyle.Fill,
                 BackColor = Color.White,
                 Margin = new Padding(0)
@@ -171,7 +228,7 @@ namespace LiteMonitor.src.UI.Controls
             Cursor = Cursors.Hand; 
             Text = text; // 设置文案
             Padding = new Padding(2); 
-            ForeColor = UIColors.TextMain;
+            ForeColor = UIColors.TextSub;
             Font = new Font("Microsoft YaHei UI", 9F);
         } 
     }

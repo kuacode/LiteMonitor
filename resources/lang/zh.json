@@ -59,7 +59,6 @@
         "Traffic": "历史流量统计",
         "More": "更多功能",
         "ThemeEditor": "主题编辑器",
-        "thresholds": "告警阈值设置",
         "TaskbarSettings": "任务栏设置",
         "TaskbarStyle": "任务栏样式", 
         "TaskbarStyleBold": "大字模式", 
@@ -80,6 +79,21 @@
         "Language": "语言/Language",
         "AutoStart": "开机启动",
         "About": "关于 LiteMonitor",
-        "Exit": "退出"
+        "Exit": "退出",
+        "SettingsPanel": "设置面板",
+        "General": "基础设置",
+        "Behavior": "行为设置",
+        "SystemSettings": "系统设置",
+        "HardwareSettings": "硬件设置",
+        "Appearance": "外观设置",
+        "MainFormSettings": "主界面设置",
+        "Monitor": "监控项设置",
+        "Taskbar": "任务栏",
+        "MainForm": "主界面",
+        "Thresholds": "告警阈值设置",
+        "Enable": "启用",
+        "Apply": "应用",
+        "Cancel": "取消",
+        "OK": "确定"
     }
 }

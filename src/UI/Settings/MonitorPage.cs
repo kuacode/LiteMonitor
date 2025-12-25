@@ -136,9 +136,16 @@ namespace LiteMonitor.src.UI.SettingsPage
             {
                 if (c is GroupBlock block)
                 {
-                    // 保存别名
+                    // 1. 获取输入框内容
                     string alias = block.Header.InputAlias.Inner.Text.Trim();
-                    if (!string.IsNullOrEmpty(alias)) 
+                    
+                    // 2. 获取当前语言下的默认组名称（例如 "Groups.DISK" -> "📀磁盘" 或 "📀Disk"）
+                    // 注意：这里必须和 GroupBlock 创建时使用的 Key 保持一致
+                    string defaultName = LanguageManager.T("Groups." + block.Header.GroupKey);
+
+                    // 3. 只有当别名 [不为空] 且 [不等于默认名称] 时，才保存到 Config
+                    // 这样如果你在英文版下保存了默认的 "📀Disk"，系统会认为这等于默认值，从而不写入 Settings.json
+                    if (!string.IsNullOrEmpty(alias) && alias != defaultName) 
                         Config.GroupAliases[block.Header.GroupKey] = alias;
                     else 
                         Config.GroupAliases.Remove(block.Header.GroupKey);

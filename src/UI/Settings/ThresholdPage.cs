@@ -13,7 +13,7 @@ namespace LiteMonitor.src.UI.SettingsPage
 
         // 不需要保留成员变量引用了，因为全是自动绑定
         private LiteCheck _chkAlertTemp;
-        private LiteUnderlineInput _inAlertTemp;
+        private LiteNumberInput _inAlertTemp;
 
         public ThresholdPage()
         {
@@ -43,7 +43,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             grpAlert.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AlertTemp"), _chkAlertTemp));
 
             // 阈值 (int)
-            _inAlertTemp = new LiteUnderlineInput("0", "°C", "", 80, UIColors.TextCrit, HorizontalAlignment.Center);
+            _inAlertTemp = new LiteNumberInput("0", "°C", "", 80, UIColors.TextCrit);
             BindInt(_inAlertTemp, 
                 () => Config.AlertTempThreshold, 
                 v => Config.AlertTempThreshold = v);
@@ -132,12 +132,16 @@ namespace LiteMonitor.src.UI.SettingsPage
             };
 
             // 创建控件
-            var inputWarn = new LiteUnderlineInput("0", unit, labelWarn, 140, UIColors.TextWarn, HorizontalAlignment.Center);
+            // ★★★ 修改开始：使用 LiteNumberInput ★★★
+            // 直接传入 labelWarn/labelCrit 和 对应的颜色
+            var inputWarn = new LiteNumberInput("0", unit, labelWarn, 140, UIColors.TextWarn);
+            
             var arrow = new Label { 
                 Text = "➜", AutoSize = true, ForeColor = Color.LightGray, 
                 Font = new Font("Microsoft YaHei UI", 9F), Margin = new Padding(5, 4, 5, 0) 
             };
-            var inputCrit = new LiteUnderlineInput("0", unit, labelCrit, 140, UIColors.TextCrit, HorizontalAlignment.Center);
+            
+            var inputCrit = new LiteNumberInput("0", unit, labelCrit, 140, UIColors.TextCrit);
 
             // ★ 核心：立即绑定 (Config.Thresholds 都是 double)
             BindDouble(inputWarn, getWarn, setWarn);

@@ -208,6 +208,47 @@ namespace LiteMonitor.src.UI.Controls
         }
     }
 
+    // =======================================================================
+    // 新增：专门的数字输入框 (继承自下划线输入框)
+    // =======================================================================
+    public class LiteNumberInput : LiteUnderlineInput
+    {
+        // 升级构造函数：支持前缀标签(label)和文字颜色(color)，以适配 ThresholdPage
+        public LiteNumberInput(
+            string text, 
+            string unit = "", 
+            string label = "",      // 新增：支持前缀 (如 "警告")
+            int width = 160, 
+            Color? color = null,    // 新增：支持颜色 (如 红色/橙色)
+            int maxLength = 10) 
+            : base(text, unit, label, width, color, HorizontalAlignment.Center) // 调用基类完整构造
+        {
+            // 1. 设置最大长度
+            this.Inner.MaxLength = maxLength;
+
+            // 2. 核心：只允许输入数字、退格键、负号、小数点
+            this.Inner.KeyPress += (s, e) =>
+            {
+                if (char.IsControl(e.KeyChar) || char.IsDigit(e.KeyChar)) return;
+                if (e.KeyChar == '.' && !this.Inner.Text.Contains(".")) return;
+                if (e.KeyChar == '-' && this.Inner.SelectionStart == 0 && !this.Inner.Text.Contains("-")) return;
+                e.Handled = true;
+            };
+
+            // 3. 失去焦点自动补零
+            this.Inner.Leave += (s, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(this.Inner.Text) || this.Inner.Text == "." || this.Inner.Text == "-")
+                {
+                    this.Inner.Text = "0";
+                }
+            };
+        }
+        
+        public int ValueInt => int.TryParse(Inner.Text, out int v) ? v : 0;
+        public double ValueDouble => double.TryParse(Inner.Text, out double v) ? v : 0.0;
+    }
+
     public class LiteColorInput : Panel
     {
         public LiteUnderlineInput Input;

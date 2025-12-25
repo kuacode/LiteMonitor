@@ -11,8 +11,8 @@ namespace LiteMonitor.src.UI.SettingsPage
     public class SystemHardwarPage : SettingsPageBase
     {
         private Panel _container;
-        private bool _isLoaded = false;
-        private string _originalLanguage; // 用于检测语言是否变更
+        private bool _isLoaded = false; 
+        private string _originalLanguage; 
 
         public SystemHardwarPage()
         {
@@ -25,7 +25,7 @@ namespace LiteMonitor.src.UI.SettingsPage
     
         public override void OnShow()
         {
-            base.OnShow(); // ★ 必须调用
+            base.OnShow(); // 1. 刷新数据 (从Config读取最新值)
             if (Config == null || _isLoaded) return;
             
             _container.SuspendLayout();
@@ -51,11 +51,9 @@ namespace LiteMonitor.src.UI.SettingsPage
             if (Directory.Exists(langDir)) {
                 foreach (var file in Directory.EnumerateFiles(langDir, "*.json")) {
                     string code = Path.GetFileNameWithoutExtension(file);
-                    cmbLang.Items.Add(code.ToUpper()); // 显示大写代码
+                    cmbLang.Items.Add(code.ToUpper());
                 }
             }
-            // 绑定语言：显示时大写匹配，保存时存小写
-            // (注意：这里简化了逻辑，假设文件名就是语言代码)
             BindCombo(cmbLang, 
                 () => string.IsNullOrEmpty(Config.Language) ? "EN" : Config.Language.ToUpper(),
                 v => Config.Language = (v == "AUTO") ? "" : v.ToLower());
@@ -67,7 +65,7 @@ namespace LiteMonitor.src.UI.SettingsPage
             BindCheck(chkAutoStart, () => Config.AutoStart, v => Config.AutoStart = v);
             group.AddItem(new LiteSettingsItem(LanguageManager.T("Menu.AutoStart"), chkAutoStart));
 
-            // 3. 隐藏托盘图标 (带安全检查)
+            // 3. 隐藏托盘图标
             var chkHideTray = new LiteCheck(false, LanguageManager.T("Menu.Enable"));
             BindCheck(chkHideTray, 
                 () => Config.HideTrayIcon, 
@@ -84,11 +82,13 @@ namespace LiteMonitor.src.UI.SettingsPage
             var group = new LiteSettingsGroup(LanguageManager.T("Menu.Calibration"));
             string suffix = " (" + LanguageManager.T("Menu.MaxLimits") + ")";
 
-            // 辅助方法：快速添加一行校准输入
             void AddCalibItem(string title, string unit, Func<float> get, Action<float> set)
             {
-                var input = new LiteUnderlineInput("0", unit, "", 60);
-                // BindDouble 通用性更强，我们在 setter 里转 float
+                // ★★★ 修改开始：使用 LiteNumberInput ★★★
+                // 宽度 60，无前缀，无特殊颜色(默认灰色)
+                var input = new LiteNumberInput("0", unit, "", 60);
+                // ★★★ 修改结束 ★★★
+                
                 BindDouble(input, () => get(), v => set((float)v)); 
                 group.AddItem(new LiteSettingsItem(title + suffix, input));
             }
@@ -119,7 +119,6 @@ namespace LiteMonitor.src.UI.SettingsPage
             cmbDisk.Items.Add(strAuto); 
             foreach (var d in HardwareMonitor.ListAllDisks()) cmbDisk.Items.Add(d);
             
-            // 绑定逻辑：如果是空字符串显示 "Auto"，否则显示具体值；保存反之
             BindCombo(cmbDisk, 
                 () => string.IsNullOrEmpty(Config.PreferredDisk) ? strAuto : Config.PreferredDisk,
                 v => Config.PreferredDisk = (v == strAuto) ? "" : v);
@@ -164,20 +163,27 @@ namespace LiteMonitor.src.UI.SettingsPage
         public override void Save()
         {
             if (!_isLoaded) return;
-
-            // 1. 自动保存所有绑定值
+            // 1. 执行基类保存 (将 UI 值写入 Config 对象)
             base.Save(); 
 
-            // 2. 应用更改
-            AppActions.ApplyAutoStart(Config);
-            AppActions.ApplyVisibility(Config, this.MainForm);
-            AppActions.ApplyMonitorLayout(this.UI, this.MainForm); // 刷新硬件源
-
-            // 3. 语言特殊处理
+            // 2. 应用语言变更 (如果变了)
+            // ★ 必须最先执行！因为语言改变可能触发完全的重绘
             if (_originalLanguage != Config.Language) {
                 AppActions.ApplyLanguage(Config, this.UI, this.MainForm);
                 _originalLanguage = Config.Language; 
             }
+
+            // 3. 应用开机自启和可见性
+            AppActions.ApplyAutoStart(Config);
+            AppActions.ApplyVisibility(Config, this.MainForm);
+            
+            // 4. 应用硬件源变更 (磁盘/网络选择)
+            AppActions.ApplyMonitorLayout(this.UI, this.MainForm);
+
+            // 5. ★★★ 核心修复：应用刷新率 ★★★
+            // 刷新率 (RefreshMs) 属于 ThemeAndLayout 的管辖范围 (负责重启 Timer)
+            // 必须显式调用它，否则刷新率不会立即生效！
+            AppActions.ApplyThemeAndLayout(Config, this.UI, this.MainForm);
         }
     }
 }

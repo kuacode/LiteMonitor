@@ -97,12 +97,15 @@ namespace LiteMonitor.src.SystemServices
             {
                 try
                 {
+                    // 1. 先启动硬件引擎
                     _computer.Open();
-
-                    // 所有的检测、下载、重载逻辑都在 Driver.cs 里处理完了
-                    await SmartCheckDriver(); 
-
+                    
+                    // 2. ★★★ 关键修改：立即构建映射 ★★★
+                    // 这样显卡、内存、硬盘的数据马上就能显示出来，不会被驱动下载卡住
                     BuildSensorMap();
+
+                    // 3. 然后在后台慢悠悠地检查/下载 CPU 驱动
+                    await SmartCheckDriver();
                 }
                 catch (Exception ex)
                 {
@@ -143,66 +146,69 @@ namespace LiteMonitor.src.SystemServices
 
                 bool isStartupPhase = (DateTime.Now - _startTime).TotalSeconds < 3;
                 bool isSlowScanTick = (DateTime.Now - _lastSlowScan).TotalSeconds > 3;
-
-                foreach (var hw in _computer.Hardware)
+                // ★★★ 加锁开始：进入临界区 ★★★
+                lock (_lock)
                 {
-                    // CPU / GPU / Memory
-                    if (hw.HardwareType == HardwareType.Cpu) { if (needCpu) hw.Update(); continue; }
-                    if (hw.HardwareType == HardwareType.GpuNvidia || hw.HardwareType == HardwareType.GpuAmd || hw.HardwareType == HardwareType.GpuIntel) { if (needGpu) hw.Update(); continue; }
-                    if (hw.HardwareType == HardwareType.Memory) { if (needMem) hw.Update(); continue; }
-
-                    // Network
-                    if (hw.HardwareType == HardwareType.Network)
+                    foreach (var hw in _computer.Hardware)
                     {
-                        if (needNet) 
+                        // CPU / GPU / Memory
+                        if (hw.HardwareType == HardwareType.Cpu) { if (needCpu) hw.Update(); continue; }
+                        if (hw.HardwareType == HardwareType.GpuNvidia || hw.HardwareType == HardwareType.GpuAmd || hw.HardwareType == HardwareType.GpuIntel) { if (needGpu) hw.Update(); continue; }
+                        if (hw.HardwareType == HardwareType.Memory) { if (needMem) hw.Update(); continue; }
+
+                        // Network
+                        if (hw.HardwareType == HardwareType.Network)
                         {
-                            bool isTarget = (_cachedNetHw != null && hw == _cachedNetHw) || 
-                                            (hw.Name == _cfg.LastAutoNetwork) ||
-                                            (hw.Name == _cfg.PreferredNetwork);
+                            if (needNet)
+                            {
+                                bool isTarget = (_cachedNetHw != null && hw == _cachedNetHw) ||
+                                                (hw.Name == _cfg.LastAutoNetwork) ||
+                                                (hw.Name == _cfg.PreferredNetwork);
 
-                            if (isTarget)
-                            {
-                                hw.Update(); 
-                                AccumulateTraffic(hw, timeDelta);
+                                if (isTarget)
+                                {
+                                    hw.Update();
+                                    AccumulateTraffic(hw, timeDelta);
+                                }
+                                else if (isStartupPhase || IsVirtualNetwork(hw.Name))
+                                {
+                                    continue;
+                                }
+                                else if (isSlowScanTick)
+                                {
+                                    hw.Update();
+                                }
                             }
-                            else if (isStartupPhase || IsVirtualNetwork(hw.Name))
-                            {
-                                continue;    
-                            }
-                            else if (isSlowScanTick)
-                            {
-                                hw.Update(); 
-                            }
+                            continue;
                         }
-                        continue;
-                    }
 
-                    // Storage
-                    if (hw.HardwareType == HardwareType.Storage)
-                    {
-                        if (needDisk) 
+                        // Storage
+                        if (hw.HardwareType == HardwareType.Storage)
                         {
-                            bool isTarget = (_cachedDiskHw != null && hw == _cachedDiskHw) || 
-                                            (hw.Name == _cfg.LastAutoDisk) || 
-                                            (hw.Name == _cfg.PreferredDisk);
+                            if (needDisk)
+                            {
+                                bool isTarget = (_cachedDiskHw != null && hw == _cachedDiskHw) ||
+                                                (hw.Name == _cfg.LastAutoDisk) ||
+                                                (hw.Name == _cfg.PreferredDisk);
 
-                            if (isTarget)
-                            {
-                                hw.Update(); 
+                                if (isTarget)
+                                {
+                                    hw.Update();
+                                }
+                                else if (isStartupPhase)
+                                {
+                                    continue;
+                                }
+                                else if (isSlowScanTick)
+                                {
+                                    hw.Update();
+                                }
                             }
-                            else if (isStartupPhase) 
-                            {
-                                continue;
-                            }
-                            else if (isSlowScanTick) 
-                            {
-                                hw.Update();
-                            }
+                            continue;
                         }
-                        continue;
                     }
                 }
-                
+
                 if (isSlowScanTick) _lastSlowScan = DateTime.Now;
 
                 // ★★★ [新增] 更新系统 CPU 计数器 ★★★

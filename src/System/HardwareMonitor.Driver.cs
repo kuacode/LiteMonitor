@@ -1,7 +1,9 @@
+
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Threading; // 必须添加
 using System.Windows.Forms;
 using LibreHardwareMonitor.Hardware;
 using Debug = System.Diagnostics.Debug;
@@ -10,72 +12,71 @@ namespace LiteMonitor.src.SystemServices
 {
     public sealed partial class HardwareMonitor
     {
-        // 定义三个下载镜像地址 (请替换为您实际可用的国内镜像/Gitee直链)
+        // 建议把最快的 Gitee/国内源放在第一个
         private readonly string[] _driverUrls = new[]
         {
-            // 镜像 1: 官方 GitHub (国内可能慢或不通)
             "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe",
-            
-            // 镜像 2: (建议替换为您的 Gitee 发行版附件直链)
             "https://litemonitor.cn/update/PawnIO_setup.exe", 
-            
-            // 镜像 3: (建议替换为备用网盘或 CDN)
             "https://github.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe" 
         };
 
-        // 手动下载页面 (当自动安装失败时打开此网页让用户自己下)
         private const string ManualDownloadPage = "https://gitee.com/Diorser/LiteMonitor/raw/master/resources/assets/PawnIO_setup.exe";
 
-        /// <summary>
-        /// [独立逻辑] 智能检查并修复驱动环境
-        /// </summary>
         private async Task SmartCheckDriver()
         {
-            // 1. 如果配置没开 CPU，不需要检查
             if (!_cfg.IsAnyEnabled("CPU")) return;
 
-            // 2. 优先检查注册表
+            // 检查逻辑不变...
             bool isDriverInstalled = IsPawnIOInstalled();
-
-            // 3. 检查 CPU 对象有效性
             var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
             bool isCpuValid = cpu != null && cpu.Sensors.Length > 0;
 
-            // 4. 决策：如果驱动缺失
             if (!isDriverInstalled || !isCpuValid)
             {
-                // 如果是完全没装，尝试静默修复
                 if (!isDriverInstalled)
                 {
                     Debug.WriteLine("[Driver] Driver missing. Attempting silent install...");
-                    
                     bool installed = await SilentDownloadAndInstall();
                     
                     if (installed)
                     {
-                        Debug.WriteLine("[Driver] Installed successfully. Reloading Computer...");
-                        try 
-                        {
-                            _computer.Close();
-                            _computer.Open();
-                        }
-                        catch { }
+                        // ★★★ 核心修改：安装成功后，热重载并重新映射 ★★★
+                        Debug.WriteLine("[Driver] Installed. Reloading...");
+                        ReloadComputerSafe();
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 检查注册表判断是否已安装
-        /// </summary>
+        // 安全重载，不影响 UpdateAll 循环
+        private void ReloadComputerSafe()
+        {
+            try 
+            {
+                // 简单的锁保护（虽然 UpdateAll 一般不锁，但尽量安全点）
+                lock (_lock) 
+                {
+                    _computer.Close();
+                    _computer.Open();
+                }
+                
+                // ★★★ 必须重新构建映射，CPU 才会出现在 UI 上 ★★★
+                BuildSensorMap(); 
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Driver] Reload failed: " + ex.Message);
+            }
+        }
+
         private bool IsPawnIOInstalled()
         {
+            // (保持你原来的代码不变)
             try
             {
                 string keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO";
                 using var k1 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(keyPath);
                 if (k1 != null) return true;
-
                 using var k2 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32).OpenSubKey(keyPath);
                 if (k2 != null) return true;
             }
@@ -84,64 +85,76 @@ namespace LiteMonitor.src.SystemServices
         }
 
         /// <summary>
-        /// 多镜像静默下载并安装
+        /// 极速切换的下载逻辑
         /// </summary>
         private async Task<bool> SilentDownloadAndInstall()
         {
             string tempPath = Path.Combine(Path.GetTempPath(), "LiteMonitor_Driver.exe");
             bool downloadSuccess = false;
 
-            // ================================================================
-            // 阶段 1: 尝试下载 (轮询所有镜像)
-            // ================================================================
             using (var client = new HttpClient())
             {
-                client.Timeout = TimeSpan.FromSeconds(15); // 每个镜像最多等 15 秒
+                // 不要在这里设置 client.Timeout，我们对每个请求单独控制
                 client.DefaultRequestHeaders.Add("User-Agent", "LiteMonitor-AutoUpdater");
 
                 foreach (var url in _driverUrls)
                 {
-                    if (string.IsNullOrWhiteSpace(url) || url.Contains("example.com")) continue; // 跳过无效配置
+                    if (string.IsNullOrWhiteSpace(url)) continue;
 
                     try
                     {
-                        Debug.WriteLine($"[Driver] Trying download from: {url}");
-                        var data = await client.GetByteArrayAsync(url);
-                        await File.WriteAllBytesAsync(tempPath, data);
-                        
-                        // 简单的文件校验 (防止下载到空文件或 404 页面)
-                        if (new FileInfo(tempPath).Length > 1024) 
+                        Debug.WriteLine($"[Driver] Trying: {url}");
+
+                        // ★★★ 改进点：使用 CancellationToken 设置 5秒 超时 ★★★
+                        // 5MB 文件如果 5秒 下不完（<1MB/s），直接视为“慢”，切下一个源
+                        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
                         {
-                            downloadSuccess = true;
-                            Debug.WriteLine("[Driver] Download success.");
-                            break; // 下载成功，跳出循环
+                            // 使用 GetAsync 而不是 GetByteArrayAsync，以便传入 Token
+                            var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                            
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var data = await response.Content.ReadAsByteArrayAsync(cts.Token); // 读取内容也受超时控制
+                                await File.WriteAllBytesAsync(tempPath, data, cts.Token);
+
+                                if (new FileInfo(tempPath).Length > 1024)
+                                {
+                                    downloadSuccess = true;
+                                    Debug.WriteLine("[Driver] Download success.");
+                                    break; // 成功，跳出循环
+                                }
+                            }
                         }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Debug.WriteLine($"[Driver] Timeout (Slow network): {url}");
+                        // 超时会自动捕获到这里，循环继续，尝试下一个 URL
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"[Driver] Download failed from {url}: {ex.Message}");
+                        Debug.WriteLine($"[Driver] Error: {url} -> {ex.Message}");
                     }
                 }
             }
 
-            // 如果所有镜像都挂了 -> 弹窗提示手动下载
             if (!downloadSuccess)
             {
-                ShowManualFailDialog("无法连接到PawnIO驱动下载服务器 (所有镜像均尝试失败)。");
+                ShowManualFailDialog("下载超时或连接失败，请检查网络。");
                 return false;
             }
 
             // ================================================================
-            // 阶段 2: 尝试安装
+            // 安装逻辑 (保持不变)
             // ================================================================
             try
             {
                 var psi = new ProcessStartInfo
                 {
                     FileName = tempPath,
-                    Arguments = "-install -silent", // 静默参数
+                    Arguments = "-install -silent",
                     UseShellExecute = true,
-                    Verb = "runas", // 请求管理员权限
+                    Verb = "runas",
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
 
@@ -149,44 +162,46 @@ namespace LiteMonitor.src.SystemServices
                 if (proc != null)
                 {
                     await proc.WaitForExitAsync();
-                    
-                    // 清理文件
                     try { File.Delete(tempPath); } catch { }
-
-                    if (proc.ExitCode == 0) return true;
+                    return proc.ExitCode == 0;
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[Driver] Install execution failed: {ex.Message}");
-                // 用户点击了 UAC 的“否”也会进这里
-            }
+            catch { } // UAC 取消
 
-            // 如果执行到这里，说明安装失败了 -> 弹窗提示
-            ShowManualFailDialog("PawnIO驱动下载成功，但自动安装失败 (可能是权限不足或被杀毒软件拦截)。");
+            ShowManualFailDialog("自动安装被取消或拦截。");
             return false;
         }
 
-        /// <summary>
-        /// 失败时的用户引导弹窗
-        /// </summary>
         private void ShowManualFailDialog(string reason)
         {
-            // 必须切换到 UI 线程显示，否则可能在后台被吞掉
-            // 如果是在 Form 的构造函数 Task.Run 里调用的，MessageBox 是安全的
-            var result = MessageBox.Show(
-                $"PawnIO驱动缺失！\n\nLiteMonitor 无法下载安装 CPU 监控所需的PawnIO驱动。\n\n原因：{reason}\n\n点击“确定”打开下载页面，请手动下载并安装 PawnIO 驱动。",
-                "驱动安装失败",
+            // 确保在 UI 线程弹窗
+            // Task.Run 里的线程不是 UI 线程，直接 MessageBox 有时会不显示或非模态
+            // 最好用 Application.OpenForms[0]?.Invoke(...)，但为了简单，直接 Show 也可以
+            // 这里为了稳妥，检查一下是否有主窗体
+            if (Application.OpenForms.Count > 0)
+            {
+                Application.OpenForms[0]?.Invoke(new Action(() => 
+                {
+                    DoShowDialog(reason);
+                }));
+            }
+            else
+            {
+                DoShowDialog(reason);
+            }
+        }
+
+        private void DoShowDialog(string reason)
+        {
+             var result = MessageBox.Show(
+                $"PawnIO驱动缺失！\n\nLiteMonitor 无法自动配置 CPU 驱动。\n{reason}\n\n点击“确定”手动下载安装。",
+                "LiteMonitor",
                 MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Warning);
 
             if (result == DialogResult.OK)
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(ManualDownloadPage) { UseShellExecute = true });
-                }
-                catch { }
+                try { Process.Start(new ProcessStartInfo(ManualDownloadPage) { UseShellExecute = true }); } catch { }
             }
         }
     }

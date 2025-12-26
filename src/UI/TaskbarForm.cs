@@ -38,8 +38,10 @@ namespace LiteMonitor
             SetClickThrough(_cfg.TaskbarClickThrough);
             CheckTheme(true);
 
+            // 初始化时也尝试构建一次，避免闪烁
             if (_cols != null && _cols.Count > 0)
             {
+                // 这里的逻辑将在 Tick 中被动态覆盖，这里仅作初始化
                 _layout.Build(_cols, _taskbarHeight);
                 Width = _layout.PanelWidth;
                 UpdatePlacement(Width);
@@ -120,7 +122,6 @@ namespace LiteMonitor
             _currentMenu.Closed += (s, e) => 
             {
                 // 延迟清理或不做处理，等待下次 Show 时清理均可
-                // 这里留空即可，依靠下次 Show 时的 Dispose 逻辑
             };
 
             _currentMenu.Show(Cursor.Position);
@@ -299,7 +300,6 @@ namespace LiteMonitor
             }
         }
 
-        // 查找位于指定屏幕上的副屏任务栏句柄
         private IntPtr FindSecondaryTaskbar(Screen screen)
         {
             IntPtr hWnd = IntPtr.Zero;
@@ -307,12 +307,9 @@ namespace LiteMonitor
             {
                 GetWindowRect(hWnd, out RECT rect);
                 Rectangle r = Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom);
-                
-                // 判断任务栏窗口是否在目标屏幕内
                 if (screen.Bounds.Contains(r.Location) || screen.Bounds.IntersectsWith(r))
                     return hWnd;
             }
-            // 如果没找到副屏任务栏（比如未开启"在所有显示器上显示任务栏"），回退到主任务栏
             return FindWindow("Shell_TrayWnd", null);
         }
 
@@ -321,15 +318,20 @@ namespace LiteMonitor
             if (_hTaskbar == IntPtr.Zero) FindHandles();
             if (_hTaskbar == IntPtr.Zero) return;
 
-            // ★★★ 核心：将 LiteMonitor 设为目标任务栏的子窗口 ★★★
             SetParent(Handle, _hTaskbar);
 
             int style = GetWindowLong(Handle, GWL_STYLE);
-            style &= (int)~0x80000000; // Remove WS_POPUP
+            style &= (int)~0x80000000; 
             style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
             SetWindowLong(Handle, GWL_STYLE, style);
 
             ApplyLayeredAttribute();
+        }
+
+        // 判断任务栏是否是垂直放置 (左右侧)
+        private bool IsVertical()
+        {
+            return _taskbarRect.Height > _taskbarRect.Width;
         }
 
         private void Tick()
@@ -340,13 +342,63 @@ namespace LiteMonitor
             if (_cols == null || _cols.Count == 0) return;
             
             UpdateTaskbarRect(); 
-                
-            _layout.Build(_cols, _taskbarHeight);
-            Width = _layout.PanelWidth;
-            Height = _taskbarHeight;
+            
+            // ★★★ 新增：垂直任务栏布局支持 ★★★
+            if (IsVertical())
+            {
+                BuildVerticalLayout();
+            }
+            else
+            {
+                // 现有的水平布局逻辑
+                _layout.Build(_cols, _taskbarHeight);
+                Width = _layout.PanelWidth;
+                Height = _taskbarHeight;
+            }
             
             UpdatePlacement(Width);
             Invalidate();
+        }
+
+        // ★★★ 新增：构建垂直列表布局 ★★★
+        private void BuildVerticalLayout()
+        {
+            int w = _taskbarRect.Width;
+            // 确保宽度有效
+            if (w < 20) w = 60; 
+
+            // 根据字体计算行高，留一点边距
+            int itemHeight = (int)(_cfg.TaskbarFontSize * 1.5f + 6);
+            if (itemHeight < 20) itemHeight = 20;
+
+            // ★★★ 新增：定义左右边距 ★★★
+            int margin = 4; // 这里设置 4 像素边距，你可以根据喜好调整（如 2~6）
+            int contentWidth = w - (margin * 2);
+
+            int y = 0;
+            foreach (var col in _cols)
+            {
+                // 垂直堆叠：先 Top 项，后 Bottom 项
+                if (col.Top != null)
+                {
+                    col.BoundsTop = new Rectangle(margin, y, contentWidth, itemHeight);
+                    y += itemHeight;
+                }
+                else col.BoundsTop = Rectangle.Empty;
+
+                if (col.Bottom != null)
+                {
+                    col.BoundsBottom = new Rectangle(margin, y, contentWidth, itemHeight);
+                    y += itemHeight;
+                }
+                else col.BoundsBottom = Rectangle.Empty;
+                
+                // 项之间微小间距
+                // y += 2; 
+            }
+
+            this.Width = w;
+            this.Height = y;
         }
 
         // -------------------------------------------------------------
@@ -354,12 +406,10 @@ namespace LiteMonitor
         // -------------------------------------------------------------
         private void UpdateTaskbarRect()
         {
-            // ★★★ 区分主屏和副屏的获取方式 ★★★
             bool isPrimary = (_hTaskbar == FindWindow("Shell_TrayWnd", null));
 
             if (isPrimary)
             {
-                // 主屏使用 SHAppBarMessage (更稳，能处理自动隐藏)
                 APPBARDATA abd = new APPBARDATA();
                 abd.cbSize = Marshal.SizeOf(abd);
                 uint res = SHAppBarMessage(ABM_GETTASKBARPOS, ref abd);
@@ -376,14 +426,12 @@ namespace LiteMonitor
             }
             else
             {
-                // 副屏只能使用 GetWindowRect (SHAppBarMessage 不支持副屏)
                 if (_hTaskbar != IntPtr.Zero && GetWindowRect(_hTaskbar, out RECT r))
                 {
                     _taskbarRect = Rectangle.FromLTRB(r.left, r.top, r.right, r.bottom);
                 }
                 else
                 {
-                     // Fallback: 找不到句柄时，尝试用 Screen 估算
                     Screen target = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == _cfg.TaskbarMonitorDevice) ?? Screen.PrimaryScreen;
                     _taskbarRect = new Rectangle(target.Bounds.Left, target.Bounds.Bottom - 40, target.Bounds.Width, 40);
                 }
@@ -417,8 +465,6 @@ namespace LiteMonitor
 
         public static int GetWidgetsWidth()
         {
-            // 小组件通常只在主屏显示，副屏返回 0
-            // 如果需要在副屏处理类似占位，需进一步判断，但Win11目前副屏无小组件
             int dpi = TaskbarForm.GetTaskbarDpi();
             if (Environment.OSVersion.Version >= new Version(10, 0, 22000))
             {
@@ -438,10 +484,42 @@ namespace LiteMonitor
             return 0;
         }
 
-        // ★★★ 3. 替换整个 UpdatePlacement 方法 ★★★
+        // ★★★ 3. UpdatePlacement 方法：增加垂直任务栏定位逻辑 ★★★
         private void UpdatePlacement(int panelWidth)
         {
+            int leftScreen = _taskbarRect.Left;
+            int topScreen;
             if (_hTaskbar == IntPtr.Zero) return;
+
+            // ★★★ 新增：垂直任务栏定位分支 ★★★
+            if (IsVertical())
+            {
+                
+                
+                // 尝试定位到托盘上方 (Vertical Taskbar通常Tray在底部)
+                // 获取托盘位置（仅主屏有效，副屏直接置底）
+                int bottomLimit = _taskbarRect.Bottom;
+                
+                if (_hTray != IntPtr.Zero && GetWindowRect(_hTray, out RECT trayRect))
+                {
+                    // 简单的有效性检查，防止托盘飞了
+                    if (trayRect.top >= _taskbarRect.Top && trayRect.bottom <= _taskbarRect.Bottom)
+                    {
+                        bottomLimit = trayRect.top;
+                    }
+                }
+
+                // 计算顶部位置：基准线 - 自身高度 - 手动偏移 - 间距
+                topScreen = bottomLimit - this.Height - _cfg.TaskbarManualOffset - 6;
+
+                // 防止超出顶部
+                if (topScreen < _taskbarRect.Top) topScreen = _taskbarRect.Top;
+
+                SetPosition(leftScreen, topScreen, _taskbarRect.Width, this.Height);
+                return;
+            }
+
+            // --- 以下为原有的水平任务栏定位逻辑 ---
 
             Screen currentScreen = Screen.FromRectangle(_taskbarRect);
             if (currentScreen == null) currentScreen = Screen.PrimaryScreen;
@@ -450,70 +528,45 @@ namespace LiteMonitor
             bool sysCentered = IsCenterAligned();
             bool isPrimary = currentScreen.Primary;
             
-            // ★★★ 1. 拆分变量：分别获取系统宽度和手动偏移 ★★★
-            int rawWidgetWidth = GetWidgetsWidth();      // 系统检测到的宽度
-            int manualOffset = _cfg.TaskbarManualOffset; // 用户设置的修正值
-
-            // 左侧对齐时使用的总宽度 (系统 + 手动)
+            int rawWidgetWidth = GetWidgetsWidth();      
+            int manualOffset = _cfg.TaskbarManualOffset; 
             int leftModeTotalOffset = rawWidgetWidth + manualOffset;
-
-            // 右侧对齐时：
-            // 系统级避让：如果任务栏居中，系统右侧通常没有小组件，所以系统避让为0；否则为检测值
             int sysRightAvoid = sysCentered ? 0 : rawWidgetWidth;
-            
-            // ★★★ 2. 关键修复：右侧总偏移 = 系统避让 + 手动偏移 ★★★
-            // 这样即使系统居中导致 sysRightAvoid 为 0，手动偏移 manualOffset 依然保留
             int rightModeTotalOffset = sysRightAvoid + manualOffset;
 
-            // 获取时间宽度 (Win11 90px)
             int timeWidth = _isWin11 ? 90 : 0; 
-
-            // LiteMonitor 的对齐设置
             bool alignLeft = _cfg.TaskbarAlignLeft && sysCentered; 
-
-            int leftScreen, topScreen;
 
             if (bottom) topScreen = _taskbarRect.Top;
             else topScreen = _taskbarRect.Top;
 
             if (alignLeft)
             {
-                // === LiteMonitor 左对齐模式 ===
                 int startX = _taskbarRect.Left + 6;
-                
-                // 应用 (系统 + 手动)
-                if (leftModeTotalOffset > 0) 
-                {
-                    startX += leftModeTotalOffset;
-                }
-                
+                if (leftModeTotalOffset > 0) startX += leftModeTotalOffset;
                 leftScreen = startX;
             }
             else
             {
-                // === LiteMonitor 右对齐模式 ===
                 if (isPrimary && _hTray != IntPtr.Zero && GetWindowRect(_hTray, out RECT tray))
                 {
-                    // 主屏：托盘左侧 - 面板宽 - 间距
                     leftScreen = tray.left - panelWidth - 6;
-                    
-                    // ★★★ 减去 (系统避让 + 手动偏移) ★★★
                     leftScreen -= rightModeTotalOffset;
                 }
                 else
                 {
-                    // 副屏：最右侧 - 面板宽 - 间距
                     leftScreen = _taskbarRect.Right - panelWidth - 10;
-                    
-                    // ★★★ 减去 (系统避让 + 手动偏移) ★★★
                     leftScreen -= rightModeTotalOffset;
-
-                    // 减去时间宽度
                     leftScreen -= timeWidth;
                 }
             }
 
-            // ... (后续防飞天逻辑保持不变) ...
+            SetPosition(leftScreen, topScreen, panelWidth, _taskbarHeight);
+        }
+
+        // 提取出的通用设置位置方法
+        private void SetPosition(int leftScreen, int topScreen, int w, int h)
+        {
             IntPtr currentParent = GetParent(Handle);
             bool isAttached = (currentParent == _hTaskbar);
 
@@ -533,14 +586,15 @@ namespace LiteMonitor
                 ScreenToClient(_hTaskbar, ref pt);
                 finalX = pt.X;
                 finalY = pt.Y;
-                SetWindowPos(Handle, IntPtr.Zero, finalX, finalY, panelWidth, _taskbarHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(Handle, IntPtr.Zero, finalX, finalY, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
             }
             else
             {
                 IntPtr HWND_TOPMOST = (IntPtr)(-1);
-                SetWindowPos(Handle, HWND_TOPMOST, finalX, finalY, panelWidth, _taskbarHeight, SWP_NOACTIVATE);
+                SetWindowPos(Handle, HWND_TOPMOST, finalX, finalY, w, h, SWP_NOACTIVATE);
             }
         }
+
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             e.Graphics.Clear(_transparentKey);
@@ -562,8 +616,6 @@ namespace LiteMonitor
             {
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= WS_EX_LAYERED | WS_EX_TOOLWINDOW;
-                // ★★★ 修复：初始化时检查配置并应用鼠标穿透属性 ★★★
-                // 必须判空 _cfg，因为 CreateParams 可能会在构造函数极早期（基类构造时）被调用
                 if (_cfg != null && _cfg.TaskbarClickThrough)
                 {
                     cp.ExStyle |= WS_EX_TRANSPARENT;
